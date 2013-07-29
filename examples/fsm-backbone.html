@@ -1,0 +1,258 @@
+
+<!doctype html>
+<html>
+
+
+
+	<head>
+
+
+		<meta charset="utf-8" />
+
+		<title>Los Rebellos - FSM example</title>
+
+
+		<link href="https://raw.github.com/necolas/normalize.css/master/normalize.css" media="screen" rel="stylesheet" />
+
+		<style>
+
+			* {
+
+				box-sizing: border-box;
+			}
+
+			html, body {
+
+				font-family: Arial, Helvetica, sans-serif;
+				margin: 0;
+				padding: 10px;
+			}
+
+			h1, p, span, ul, li {
+
+				margin: 0;
+				padding: 0;
+			}
+
+			h1 {
+
+				margin-bottom: 10px;
+			}
+
+			ul {
+
+				margin-top: 5px;
+			}
+
+			li {
+
+				margin-left: 20px;
+			}
+
+			p {
+
+				text-decoration: underline;
+			}
+
+			.box {
+
+				background-color: #ddd;
+				border-radius: 5px;
+				float: left;
+				margin: 0 10px 10px 0;
+				max-width: 280px;
+				padding: 10px;
+				width: 30%;
+			}
+
+			.transitions {
+
+				clear: both;
+			}
+
+			.transitions, .logging {
+
+				display: none;
+			}
+
+			.active {
+
+				display: block;
+			}
+
+		</style>
+
+
+	</head>
+
+
+
+	<body>
+
+
+		<h1 class="current-state">Current state: <span></span></h1>
+
+		<div class="box controls">
+			<button class="start-fsm">start fsm</button>
+			<button class="stop-fsm">stop fsm</button>
+			<button class="clear-logs">clear logs</button>
+		</div>
+
+		<div class="box transitions">
+			<p>transitions:</p>
+			<ul></ul>
+		</div>
+
+		<div class="box logging">
+			<p>logs:</p>
+			<ul class="logs"></ul>
+		</div>
+
+
+		<script type="text/javascript" src="data/fsm.js"></script>
+
+		<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+		<script type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.5.1/underscore-min.js"></script>
+		<script type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.0.0/backbone-min.js"></script>
+
+		<script type="text/javascript" src="../src/losrebellos/statemachine/statemachine.backbone.min.js"></script>
+
+		<script type="text/javascript">
+
+
+			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			// FSM
+			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+			// fsm options
+
+			var _dispatcher = _.extend({}, Backbone.Events);
+			var _options = {
+
+				// if dispatcher is null, one will be created
+				// and accessible thru _stateMachine.getDispatcher()
+				dispatcher: _dispatcher
+			}
+
+
+			// setup the fsm
+
+			var _stateMachine = losrebellos.fsmFactory(FSM, _options, losrebellos.BackboneStateMachine);
+
+
+			// handlers:
+			// uses events only
+
+			var _onFSMStarted = function(stateMachine, state, data) {
+
+		    	log("on FSM <b>started</b>: " + state.name);
+			}
+
+			var _onFSMStopped = function(stateMachine, state, data) {
+
+		    	log("on FSM <b>stopped</b>: " + state.name);
+			    log("---");
+			}
+
+		    var _onStateChanged = function(stateMachine, currentState, currentData) {
+
+		    	// handlers off
+		    	$(".transitions")
+		    		.find("button")
+		    			.off("click")
+
+		    	// current state
+		    	$(".current-state").find("span")
+		    		.html(currentState.name);
+
+		    	// log
+		    	log("state <b>changed</b>: " + currentState.name + (currentData ? (" with <b>data</b>: " + currentData) : ""));
+
+		    	// transitions
+		    	var _transitions = "";
+		    	for(var key in currentState.transitions) {
+
+		    		_transitions += "<li><button>" + key + "</button> for " + currentState.transitions[key] + " state</li>";
+		    	}
+
+		    	$(".transitions ul")
+		    		.html(_transitions)
+
+		    	// handlers on
+		    		.find("button")
+		    			.on("click", function(e) {
+
+		    				// create data for the state? (sometimes only)
+		    				var _data = (Math.random() > .5) ? Math.random() : null;
+
+		    				// change state
+		    				_stateMachine.onAction($(e.currentTarget).html(), _data);
+		    			});
+		    }
+
+
+			// test command
+
+			function ClosedCommand() {
+
+				this.execute = function(statemachine, dispatcher, state, data) {
+
+					log("<b>ClosedCommand</b> executed" + (data ? (" with data: " + data) : "."));
+				}
+			}
+
+
+
+			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			// CONTROLS / UTILS
+			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+			// controls the fsm
+
+			$(".start-fsm").on("click", function() {
+				
+				_dispatcher.bind(losrebellos.StateEvent.FSM_STARTED, _onFSMStarted);
+				_dispatcher.bind(losrebellos.StateEvent.FSM_STOPPED, _onFSMStopped);
+				_dispatcher.bind(losrebellos.StateEvent.CHANGED, _onStateChanged);
+
+				_stateMachine.start();
+			});
+
+			$(".stop-fsm").on("click", function() {
+				
+				_stateMachine.stop();
+
+				_dispatcher.unbind(losrebellos.StateEvent.FSM_STARTED);
+				_dispatcher.unbind(losrebellos.StateEvent.FSM_STOPPED);
+				_dispatcher.unbind(losrebellos.StateEvent.CHANGED);
+			});
+
+			$(".clear-logs").on("click", function() {
+
+				$(".logs").empty();
+			});
+
+
+			// logs
+
+			function log(string) {
+
+				var _panels = $(".logging, .transitions");
+				if(!_panels.hasClass("active")) {
+
+					_panels.addClass("active");
+					_panels.addClass("active");
+				}
+
+		    	$(".logs").append("<li>" + string + "</li>");
+			}
+
+
+		</script>
+
+
+	</body>
+
+
+
+</html>
